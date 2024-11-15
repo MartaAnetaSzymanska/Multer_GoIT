@@ -4,11 +4,12 @@ const express = require("express");
 const path = require("path");
 const multer = require("multer");
 const { v4: uuidV4 } = require("uuid");
-const { setUpFolder } = require("./helpers");
+const { setUpFolder, isImageAndTransform } = require("./helpers");
 
 const app = express();
 // console.log(uuidV4());
 
+// użycie ejs template w express umożliwia wygenerowanie dynamicznego HTML
 app.set("view engine", "ejs");
 app.use(express.static(path.resolve(__dirname, "./public")));
 
@@ -32,7 +33,7 @@ const uploadMiddleware = multer({
   storage,
   fileFilter: async (req, file, cb) => {
     const extension = path.extname(file.originalname).toLowerCase();
-    const mimetype = path.mimetype;
+    const mimetype = file.mimetype;
 
     // paczka multer wymaga, ze jesli warunek się zgadza, mamy zwrócić false
     if (
@@ -56,10 +57,36 @@ app.post(
     if (!req.file) {
       return res.status(400).json({ message: "File isn't a photo" });
     }
-    res.json(req.file);
+    const { path: temporaryPath } = req.file;
+    const extension = path.extname(temporaryPath);
+    const fileName = `${uuidV4()}${extension}`;
+    const filePath = path.join(storageImageDir, fileName);
+
+    try {
+      await fs.rename(temporaryPath, filePath);
+    } catch (e) {
+      await fs.unlink(temporaryPath);
+
+      return next(e);
+    }
+
+    const isValidAndTransform = await isImageAndTransform(filePath);
+    if (!isValidAndTransform) {
+      await fs.unlink(filePath);
+      return res
+        .status(400)
+        .json({ message: "File isn't a photo but pretending" });
+    }
+
+    res.redirect(`/uploaded/${fileName}`);
   }
 );
 
+app.get("/uploaded/:imgPath", (req, rex) => {
+  const { imgPath } = req.params;
+
+  res.render("uploaded", { imgPath });
+});
 // ERROR HANDLING
 
 app.use((req, res, next) => {
