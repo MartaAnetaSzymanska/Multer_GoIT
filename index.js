@@ -82,7 +82,7 @@ app.post(
   }
 );
 
-app.get("/uploaded/:imgPath", (req, rex) => {
+app.get("/uploaded/:imgPath", (req, res) => {
   const { imgPath } = req.params;
 
   res.render("uploaded", { imgPath });
